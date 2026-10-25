@@ -1,23 +1,18 @@
-# AI Diabetes Prediction
+# Diabetes, Hypertension, and Stroke Prediction
 
-A machine learning project for predicting diabetes risk using survey-based lifestyle and health indicators from the CDC's Behavioral Risk Factor Surveillance System (BRFSS), based on the `prosperchuks/health-dataset`.
-
-The workflow spans exploratory data analysis (EDA), feature selection, data preprocessing, model experimentation (Random Forest, Hyperparameter Tuning via RandomizedSearchCV, and XGBoost), domain feature engineering, and decision threshold calibration optimized for clinical recall.
+End-to-end machine learning pipelines for clinical risk screening across three chronic conditions. This project focuses on **data integrity auditing**, **domain-specific feature engineering**, **class imbalance handling**, and **decision threshold optimization** to minimize false negatives in medical screening.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Dataset](#dataset)
-- [Project Workflow](#project-workflow)
-  - [1. Data Loading & Preprocessing](#1-data-loading--preprocessing)
-  - [2. Exploratory Data Analysis & Feature Selection](#2-exploratory-data-analysis--feature-selection)
-  - [3. Feature Engineering](#3-feature-engineering)
-  - [4. Model Training & Tuning](#4-model-training--tuning)
-  - [5. Decision Threshold Calibration](#5-decision-threshold-calibration)
-- [Model Performance Summary](#model-performance-summary)
-- [Key Insights & Feature Importance](#key-insights--feature-importance)
+- [Repository Structure & Results](#repository-structure--results)
+- [Notebooks](#notebooks)
+  - [01 — Diabetes](#01--diabetes)
+  - [02 — Hypertension / CVD](#02--hypertension--cvd)
+  - [03 — Stroke](#03--stroke)
+- [Key Engineering Highlights](#key-engineering-highlights)
 - [Project Structure](#project-structure)
 - [Installation & Setup](#installation--setup)
 - [Usage](#usage)
@@ -26,86 +21,110 @@ The workflow spans exploratory data analysis (EDA), feature selection, data prep
 
 ## Overview
 
-Diabetes is a significant chronic health condition worldwide. Early identification of individuals at risk enables timely medical intervention and lifestyle modification. This project develops and evaluates tree-based machine learning pipelines (Random Forest and XGBoost) to classify individuals as healthy (`0.0`) or diabetic (`1.0`) while prioritizing clinical recall to minimize false negatives.
+Early identification of individuals at risk for chronic conditions enables timely medical intervention and lifestyle modification. This project develops and evaluates tree-based machine learning pipelines (Random Forest and XGBoost) across three datasets, each requiring its own data integrity audit, feature engineering strategy, and threshold calibration to minimize missed diagnoses (false negatives).
 
 ---
 
-## Dataset
+## Repository Structure & Results
 
-- **Source:** Kaggle [`prosperchuks/health-dataset`](https://www.kaggle.com/datasets/prosperchuks/health-dataset) (`diabetes_data.csv`) downloaded automatically via `kagglehub`.
-- **Size:** 70,692 observations, 18 initial columns.
-- **Missing Values:** None (0 null values).
-- **Class Balance:** Perfectly balanced target (`Diabetes`):
-  - Healthy (`0.0`): 35,346 samples (50.0%)
-  - Diabetes (`1.0`): 35,346 samples (50.0%)
-- **Data Split:** 80% train (56,553 samples), 20% test (14,139 samples) with `random_state=42`.
+| Notebook | Condition | Clean Dataset Size | Final Model | Decision Threshold | Key Metrics |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `01_diabetes_ml.ipynb` | **Diabetes** | 70,692 rows | `XGBClassifier` | `0.450` | **0.84 Recall** on positive cases |
+| `02_hypertension_ml.ipynb` | **Hypertension / CVD** | 68,539 rows | `XGBClassifier` (`RandomizedSearchCV`) | `0.420` | **0.802 ROC-AUC** \| **0.76 Recall** \| **73.5% Acc** |
+| `03_stroke_ml.ipynb` | **Stroke** | 3,425 unique rows | `RandomForest` (`class_weight='balanced'`) | `0.373` *(Youden's J)* | **0.72 Recall** on 18:1 imbalanced data |
 
 ---
 
-## Project Workflow
+## Notebooks
 
-### 1. Data Loading & Preprocessing
-- Automated dataset fetch using `kagglehub.dataset_download`.
-- Stratified/reproducible train-test split (`test_size=0.2`, `random_state=42`).
-- Standardized continuous features (`BMI`) using `StandardScaler` fitted strictly on training data to prevent data leakage.
+### 01 — Diabetes
 
-### 2. Exploratory Data Analysis & Feature Selection
-- Correlation heatmaps and feature correlations against the target variable.
-- Correlation filtering: retained features with absolute correlation \(|r| > 0.10\) against `Diabetes`.
-- Analyzed distribution across key health indicators including `GenHlth`, `HighBP`, `BMI`, `Age`, and `HighChol`.
+**Dataset:** Kaggle [`prosperchuks/health-dataset`](https://www.kaggle.com/datasets/prosperchuks/health-dataset) (`diabetes_data.csv`) — 70,692 rows, 18 columns, perfectly balanced target (50/50).
 
-### 3. Feature Engineering
-Domain-specific interaction terms and composite risk scores were engineered:
-- **Cardiovascular Risk Score (`Cardio_Risk_Score`)**: Sum of co-morbid cardiovascular risk conditions (`HighBP + HighChol + HeartDiseaseorAttack + Stroke`).
-- **BMI × Age Interaction (`BMI_x_Age`)**: Interaction capturing metabolic risk accumulation across aging cohorts.
-- **Health Burden Index (`Health_Burden`)**: Interaction combining self-rated general health and physical health limitation days (`GenHlth * (PhysHlth + 1)`).
+**Workflow:**
+1. **EDA & Feature Selection** — Correlation heatmaps; retained features with `|r| > 0.10` against `Diabetes` target.
+2. **Feature Engineering** — Constructed three composite risk scores:
+   - **`Cardio_Risk_Score`**: Sum of cardiovascular comorbidities (`HighBP + HighChol + HeartDiseaseorAttack + Stroke`).
+   - **`BMI_x_Age`**: Interaction capturing metabolic risk accumulation across aging cohorts.
+   - **`Health_Burden`**: `GenHlth × (PhysHlth + 1)` — self-rated health weighted by limitation days.
+3. **Modeling** — Random Forest baseline → `RandomizedSearchCV` tuning → XGBoost with engineered features.
+4. **Threshold Calibration** — Lowered from `0.50` → `0.45` to boost diabetic Recall from **0.80 → 0.84**.
 
-### 4. Model Training & Tuning
-- **Random Forest Classifier**:
-  - Baseline model evaluated with `n_estimators=100`, `max_depth=10`.
-  - Feature ablation experiment tested top 8 vs. all 11 correlated features.
-  - Hyperparameter optimization via `RandomizedSearchCV` (exploring depth, estimator counts, sample splits, and feature selection strategies).
-- **XGBoost Classifier**:
-  - Gradient-boosted trees configured with `n_estimators=300`, `max_depth=5`, `learning_rate=0.05`, `subsample=0.8`, `colsample_bytree=0.8`.
-  - Retrained on engineered feature sets to capture non-linear relationships and interactions.
+**Final Model Performance (XGBoost @ threshold 0.45):**
 
-### 5. Decision Threshold Calibration
-In clinical diagnostics, false negatives (failing to identify an individual with diabetes) carry a higher risk than false positives. The classification decision boundary was tuned:
-- Default threshold: `0.50` (Recall: 0.80)
-- Calibrated threshold: `0.45` (Recall boosted to **0.84** on diabetic class)
+| Accuracy | Precision | Recall | F1 |
+| :---: | :---: | :---: | :---: |
+| 75.00% | 0.71 | **0.84** | 0.77 |
+
+**Top Features (XGBoost importance):**
+1. `HighBP` — ~40.3% relative importance
+2. `Cardio_Risk_Score` — ~21.8%
+3. `GenHlth` — ~16.0%
 
 ---
 
-## Model Performance Summary
+### 02 — Hypertension / CVD
 
-Evaluated on the held-out test set (\(N = 14,139\)):
+**Dataset:** Kaggle [`sulianova/cardiovascular-disease-dataset`](https://www.kaggle.com/datasets/sulianova/cardiovascular-disease-dataset) (`cardio_train.csv`) — semicolon-delimited; cleaned to **68,539 rows**.
 
-| Model | Setup / Features | Test Accuracy | Diabetic Precision | Diabetic Recall | Diabetic F1 |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Random Forest (Baseline)** | 11 correlated features (`max_depth=10`) | 74.91% | 0.73 | 0.79 | 0.76 |
-| **Random Forest (Slim)** | Top 8 features by importance | 74.61% | — | — | — |
-| **Random Forest (Tuned)** | `RandomizedSearchCV` (`max_depth=8`) | 74.77% | — | — | — |
-| **XGBoost (Baseline)** | Correlated features | 75.10% | 0.73 | 0.80 | 0.76 |
-| **XGBoost + Feature Engineering** | Engineered risk scores & interactions | 75.17% | 0.73 | 0.80 | 0.76 |
-| **XGBoost (Threshold = 0.45)** | Engineered features, calibrated decision boundary | **75.00%** | **0.71** | **0.84** | **0.77** |
+**Data Integrity Audit:**
+- Dropped `id` column and 24 exact duplicate rows.
+- Filtered physiologically impossible blood pressure readings (`ap_hi`: 70–250, `ap_lo`: 40–160) and height/weight outliers.
+- Converted `age` from days to years.
 
-### Confusion Matrix (XGBoost @ Threshold 0.45)
+**Feature Engineering:**
+- **`bmi`**: Derived from `weight` / `(height/100)²`.
+- **`pulse_pressure`**: `ap_hi − ap_lo`.
+- **`map` (Mean Arterial Pressure)**: `ap_lo + pulse_pressure / 3`.
+- Dropped low-signal columns: `gender`, `alco`, `height`, `smoke`, `active`, `weight`, `ap_lo`.
 
-```text
-               Predicted Negative (0)    Predicted Positive (1)
-Actual Healthy (0)           4,662                     2,428
-Actual Diabetes (1)          1,123                     5,926
-```
+**Modeling:**
+- Random Forest baseline (`n_estimators=100`, `max_depth=10`).
+- XGBoost tuned via `RandomizedSearchCV` across depth, learning rate, regularization (L1/L2), subsampling, and `min_child_weight`.
+
+**Final Model Performance (XGBoost @ threshold 0.42):**
+
+| ROC-AUC | Recall | Accuracy |
+| :---: | :---: | :---: |
+| **0.802** | **0.76** | **73.5%** |
 
 ---
 
-## Key Insights & Feature Importance
+### 03 — Stroke
 
-According to the XGBoost feature importance attribution:
-1. **HighBP (High Blood Pressure)** (~40.3% relative importance) — strongest individual predictive indicator.
-2. **Cardio_Risk_Score** (~21.8%) — composite cardiovascular comorbidity score created during feature engineering proved to be the second most influential predictor.
-3. **GenHlth (General Health Rating)** (~16.0%) — strong patient self-assessment proxy for underlying chronic conditions.
-4. **Age & Interaction Terms (`BMI_x_Age`, `Health_Burden`)** — meaningful secondary signals reflecting cumulative metabolic strain.
+**Dataset:** Kaggle [`prosperchuks/health-dataset`](https://www.kaggle.com/datasets/prosperchuks/health-dataset) (`stroke_data.csv`) — severe class imbalance (~18:1 non-stroke to stroke).
+
+**Data Integrity Audit:**
+- Identified synthetic row-cloning: identical clinical profiles (`avg_glucose_level`, `bmi`, `hypertension`, etc.) were duplicated with randomized `age` and `sex` values — a form of target leakage.
+- Dropped `age` and `sex` columns, then de-duplicated on remaining clinical features → **3,425 unique rows**.
+
+**Feature Engineering:**
+- **`Metabolic_Risk`**: `avg_glucose_level × bmi`
+- **`Glucose_Heart_Risk`**: `avg_glucose_level × (heart_disease + 1)`
+- **`Vascular_Risk`**: Composite of top 3 vascular predictors.
+- Dropped low-signal lifestyle columns: `Residence_type`, `work_type`, `smoking_status`.
+
+**Modeling:**
+- `RandomForestClassifier(class_weight='balanced')` — chosen over XGBoost due to extreme imbalance.
+- Stratified train/test split (`stratify=y`, `random_state=42`).
+
+**Threshold Calibration:**
+- Applied **Youden's J statistic** (`argmax(tpr - fpr)`) on the ROC curve → optimal threshold **`0.373`**.
+
+**Final Model Performance (Random Forest @ threshold 0.373):**
+
+| Recall (Stroke) | Note |
+| :---: | :--- |
+| **0.72** | Achieved on 18:1 imbalanced data after Youden's J calibration |
+
+---
+
+## Key Engineering Highlights
+
+- **Synthetic Data & Leakage Auditing:** Identified and stripped synthetic row-cloning and randomized `age`/`sex` noise in community datasets, preventing target leakage and inflated validation scores.
+- **Clinical Feature Engineering:** Constructed physiological interaction features including **BMI**, **Pulse Pressure**, **Mean Arterial Pressure (MAP)**, **Metabolic Risk**, and **Vascular Burden**.
+- **Medical Threshold Tuning:** Shifted away from default `0.50` probability boundaries using ROC-AUC curves and **Youden's J statistic** to prioritize sensitivity (recall) and reduce missed diagnoses (False Negatives).
+- **Class Imbalance Handling:** Used `class_weight='balanced'` in Random Forest and stratified splits for the stroke dataset to handle an extreme 18:1 minority class ratio.
 
 ---
 
@@ -113,12 +132,14 @@ According to the XGBoost feature importance attribution:
 
 ```text
 AI-diabetes/
-├── 01_diabetes_ml.ipynb   # Main Jupyter notebook containing EDA, modeling, and evaluation
-├── pyproject.toml         # Project metadata and dependencies (managed via uv)
-├── uv.lock                # Locked dependency tree
-├── README.md              # Project documentation
+├── 01_diabetes_ml.ipynb      # Diabetes: EDA, feature engineering, XGBoost, threshold tuning
+├── 02_hypertension_ml.ipynb  # Hypertension/CVD: audit, MAP/BMI engineering, XGBoost + RandomizedSearchCV
+├── 03_stroke_ml.ipynb        # Stroke: leakage audit, balanced RF, Youden's J threshold
+├── pyproject.toml            # Project metadata and dependencies (managed via uv)
+├── uv.lock                   # Locked dependency tree
+├── README.md                 # Project documentation
 └── src/
-    └── ai_diabetes/       # Source package directory
+    └── ai_diabetes/          # Source package directory
         └── __init__.py
 ```
 
@@ -129,6 +150,7 @@ AI-diabetes/
 ### Prerequisites
 - Python `>= 3.12`
 - Recommended: [`uv`](https://docs.astral.sh/uv/) (or standard `pip` / `venv`)
+- Kaggle API credentials configured (datasets are downloaded automatically via `kagglehub`)
 
 ### Installation with `uv`
 
@@ -153,10 +175,16 @@ pip install -e .
 
 ## Usage
 
-Launch Jupyter Lab or Notebook to run the pipeline:
+Launch Jupyter Lab to run any of the pipelines:
 
 ```bash
 uv run jupyter lab
 ```
 
-Open [`01_diabetes_ml.ipynb`](01_diabetes_ml.ipynb) and run all cells. The notebook will automatically download the dataset via `kagglehub`, perform data preparation, train the models, and output performance metrics and visualizations.
+Open the desired notebook and run all cells. Each notebook will automatically download its dataset via `kagglehub`, perform data auditing, feature engineering, model training, and output performance metrics and visualizations.
+
+| Notebook | Dataset downloaded |
+| :--- | :--- |
+| `01_diabetes_ml.ipynb` | `prosperchuks/health-dataset` → `diabetes_data.csv` |
+| `02_hypertension_ml.ipynb` | `sulianova/cardiovascular-disease-dataset` → `cardio_train.csv` |
+| `03_stroke_ml.ipynb` | `prosperchuks/health-dataset` → `stroke_data.csv` |
